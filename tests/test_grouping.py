@@ -6,7 +6,7 @@ Pure logic, no network, no filesystem - hand-built ExtractedLeg objects only.
 from datetime import datetime
 
 from travel_itinerary_builder.extractor import ExtractedLeg
-from travel_itinerary_builder.grouping import group_legs_into_trips
+from travel_itinerary_builder.grouping import dedupe_legs, group_legs_into_trips
 
 
 def make_leg(start: datetime, end: datetime, **overrides) -> ExtractedLeg:
@@ -84,3 +84,72 @@ def test_input_order_does_not_matter_output_is_sorted():
     trips = group_legs_into_trips([leg2, leg1])
 
     assert trips == [[leg1, leg2]]
+
+
+# ---------------------------------------------------------------------------
+# dedupe_legs - the same real booking described by two confirmation emails
+# ---------------------------------------------------------------------------
+
+
+def test_dedupe_collapses_the_same_booking_described_twice():
+    """Mirrors a real case found via live testing: a hotel booking forwarded
+    as both a "confirmation" and a later "hotel details" email produced two
+    near-identical legs - same type/provider/dates/cost, but two different
+    confirmation numbers (a short display code vs. the underlying itinerary
+    number) and different notes."""
+    confirmation_email_leg = make_leg(
+        datetime(2026, 5, 9, 0, 0),
+        datetime(2026, 5, 14, 0, 0),
+        leg_type="hotel",
+        provider="Park MGM Las Vegas (booked via Expedia)",
+        confirmation_number="2TODYXP3XY",
+        cost=525.21,
+        currency="GBP",
+        notes="1 room, Park MGM King, 2 adults, 5 nights.",
+    )
+    hotel_details_email_leg = make_leg(
+        datetime(2026, 5, 9, 0, 0),
+        datetime(2026, 5, 14, 0, 0),
+        leg_type="hotel",
+        provider="Park MGM Las Vegas (booked via Expedia)",
+        confirmation_number="72069055891360",
+        cost=525.21,
+        currency="GBP",
+        notes=(
+            "1 room, Park MGM King; 2 adults; 5 nights (avg 62.45/night); "
+            "accommodation 354.05 + taxes & fees 41.79."
+        ),
+    )
+
+    deduped = dedupe_legs([confirmation_email_leg, hotel_details_email_leg])
+
+    assert len(deduped) == 1
+    kept = deduped[0]
+    # The longer, more informative notes win as the primary record...
+    assert kept.notes.startswith("1 room, Park MGM King; 2 adults; 5 nights")
+    # ...but the other email's confirmation number isn't silently lost.
+    assert "2TODYXP3XY" in kept.notes
+
+
+def test_dedupe_leaves_genuinely_different_legs_alone():
+    flight = make_leg(datetime(2026, 5, 9, 8, 0), datetime(2026, 5, 9, 11, 0))
+    hotel = make_leg(
+        datetime(2026, 5, 9, 0, 0),
+        datetime(2026, 5, 14, 0, 0),
+        leg_type="hotel",
+        provider="Park MGM Las Vegas",
+    )
+
+    deduped = dedupe_legs([flight, hotel])
+
+    assert deduped == [flight, hotel]
+
+
+def test_dedupe_is_a_noop_when_confirmation_numbers_already_match():
+    leg = make_leg(datetime(2026, 5, 9, 0, 0), datetime(2026, 5, 14, 0, 0))
+    identical_copy = make_leg(datetime(2026, 5, 9, 0, 0), datetime(2026, 5, 14, 0, 0))
+
+    deduped = dedupe_legs([leg, identical_copy])
+
+    assert len(deduped) == 1
+    assert deduped[0].notes == ""

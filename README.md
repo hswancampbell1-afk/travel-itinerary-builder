@@ -21,7 +21,9 @@ later phase, once this piece is proven standalone.
    start/end date-time and location, cost, and notes - or to flag the text
    as not a booking confirmation at all (a newsletter, an unrelated
    receipt), rather than force-fitting it into a fake leg.
-2. Groups the successfully-extracted legs into trips by date proximity (a
+2. Collapses legs that describe the same real-world booking twice (e.g. an
+   initial "confirmation" and a later "hotel details" follow-up email for
+   one hotel stay), then groups what's left into trips by date proximity (a
    new trip starts whenever the gap between one leg's end and the next
    leg's start exceeds `--gap-days`, default 4).
 3. Writes one `<slug>.md` and one `<slug>.ics` file per trip into
@@ -119,6 +121,13 @@ python -m pytest -q
   clients (Outlook, Google Calendar, Apple Calendar, ...) each have their
   own quirks reading third-party `.ics` files - if an event looks wrong
   after importing, check the source markdown first.
+- **Duplicate-booking detection is exact-match only.** Two legs are folded
+  into one when leg_type, provider, start/end datetime, cost and currency
+  all match exactly (confirmation_number is deliberately excluded, since the
+  same booking is often quoted under two different reference numbers across
+  its own confirmation emails). A genuine duplicate that differs in any of
+  those other fields - a slightly reworded provider name, a rounding
+  difference in cost - will not be caught and will still appear as two legs.
 - **One API call per input file, no batching.** Matches the "one thing per
   call" pattern used across this suite's other extraction tools - it costs
   more calls for a large batch of confirmations, in exchange for one bad

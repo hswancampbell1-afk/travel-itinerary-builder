@@ -6,10 +6,15 @@ extracted by extractor.py) and clusters them. Callers are responsible for
 separating unparseable inputs out first: this module only ever sees legs
 that extracted successfully, and never silently drops or guesses at one -
 see cli.py for where unparseable inputs are collected and reported instead.
+
+Callers should also run `dedupe_legs` before `group_legs_into_trips` - see
+its own docstring for why (the same booking described by more than one
+confirmation email must not become two legs in the output).
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from typing import List, Sequence
 
@@ -20,6 +25,65 @@ from .extractor import ExtractedLeg
 # rather than hardcoded, since what counts as "still one trip" is a genuine
 # judgment call that varies by traveler.
 DEFAULT_GAP_DAYS = 4
+
+
+def dedupe_legs(legs: Sequence[ExtractedLeg]) -> List[ExtractedLeg]:
+    """Collapse legs that describe the same real-world booking twice.
+
+    Found via real testing: a booking is often confirmed by more than one
+    email (an initial "confirmation" and a later "hotel details" or
+    "e-ticket" follow-up), and each is extracted independently since
+    extractor.py only ever sees one input file at a time. Two legs are
+    treated as the same booking when leg_type, provider, start_datetime,
+    end_datetime, cost and currency all match exactly.
+    confirmation_number is deliberately EXCLUDED from that check - the same
+    real booking is routinely quoted under two different reference numbers
+    across its own confirmation emails (e.g. a short display code in one,
+    the underlying itinerary number in the other), so requiring it to match
+    would defeat the point of this function.
+
+    The kept leg is whichever of the pair has the longer `notes` (treated as
+    a proxy for "more informative"); if the discarded leg had a different,
+    non-empty confirmation_number, it's folded into the kept leg's notes so
+    that reference number isn't silently lost.
+
+    Order-preserving and does not otherwise sort - call before
+    group_legs_into_trips, which does its own sorting.
+    """
+    kept: List[ExtractedLeg] = []
+    index_by_key: dict = {}
+
+    for leg in legs:
+        key = (
+            leg.leg_type,
+            leg.provider,
+            leg.start_datetime,
+            leg.end_datetime,
+            leg.cost,
+            leg.currency,
+        )
+        existing_index = index_by_key.get(key)
+        if existing_index is None:
+            index_by_key[key] = len(kept)
+            kept.append(leg)
+            continue
+
+        existing = kept[existing_index]
+        primary, other = (
+            (existing, leg) if len(existing.notes) >= len(leg.notes) else (leg, existing)
+        )
+        if other.confirmation_number and other.confirmation_number != primary.confirmation_number:
+            extra = (
+                f"Also referenced as confirmation {other.confirmation_number} "
+                f"in a separate confirmation email for the same booking."
+            )
+            primary = replace(
+                primary,
+                notes=f"{primary.notes} {extra}".strip() if primary.notes else extra,
+            )
+        kept[existing_index] = primary
+
+    return kept
 
 
 def group_legs_into_trips(

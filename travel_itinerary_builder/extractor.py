@@ -22,6 +22,7 @@ placeholder number the model filled in.
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any, Literal, Optional, Union
@@ -263,6 +264,20 @@ def _parse_flexible_datetime(raw: str) -> Optional[tuple]:
     return None
 
 
+def _clean_text(value: Any) -> str:
+    """Strip whitespace and un-escape HTML entities from a model-extracted
+    free-text field.
+
+    Real confirmation emails are frequently HTML underneath, and the model
+    sometimes copies an entity straight through (a "Park & Ride" in the
+    source becomes "Park &amp; Ride" in the tool output) instead of decoding
+    it first - found via real testing, not the bundled sample data, which
+    never happened to contain an ampersand. html.unescape is a no-op on text
+    that was never escaped, so this is safe to apply unconditionally.
+    """
+    return html.unescape(str(value).strip())
+
+
 def _validate_and_build(raw: dict, source_text: str) -> ExtractionResult:
     """Validate a tool-input dict and turn it into an ExtractionResult.
 
@@ -280,7 +295,7 @@ def _validate_and_build(raw: dict, source_text: str) -> ExtractionResult:
         reason = raw.get("reason") or (
             "This text could not be understood as a booking confirmation."
         )
-        return LegExtractionError(reason=str(reason), raw_text=source_text)
+        return LegExtractionError(reason=_clean_text(reason), raw_text=source_text)
 
     required = (
         "leg_type",
@@ -349,18 +364,18 @@ def _validate_and_build(raw: dict, source_text: str) -> ExtractionResult:
 
     return ExtractedLeg(
         leg_type=leg_type,  # type: ignore[arg-type]
-        provider=str(raw["provider"]).strip(),
-        confirmation_number=str(raw["confirmation_number"]).strip(),
-        traveler_name=str(raw["traveler_name"]).strip(),
+        provider=_clean_text(raw["provider"]),
+        confirmation_number=_clean_text(raw["confirmation_number"]),
+        traveler_name=_clean_text(raw["traveler_name"]),
         start_datetime=start_dt,
         start_has_time=start_has_time,
-        start_location=str(raw["start_location"]).strip(),
+        start_location=_clean_text(raw["start_location"]),
         end_datetime=end_dt,
         end_has_time=end_has_time,
-        end_location=str(raw["end_location"]).strip(),
+        end_location=_clean_text(raw["end_location"]),
         cost=cost,
         currency=currency,
-        notes=str(raw["notes"]).strip(),
+        notes=_clean_text(raw["notes"]),
         raw_text=source_text,
     )
 

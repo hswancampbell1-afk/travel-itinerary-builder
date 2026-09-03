@@ -169,6 +169,46 @@ def test_no_cost_stated_leaves_cost_none_regardless_of_placeholder_number():
 
 
 # ---------------------------------------------------------------------------
+# HTML entities in real-world source text must not leak into the output
+# ---------------------------------------------------------------------------
+
+
+def test_html_entities_in_extracted_fields_are_unescaped():
+    """Found via real testing: a real Heathrow parking confirmation had a
+    plain '&' in the source text, but the model's own extraction returned
+    '&amp;' - the bundled sample data never happened to contain an
+    ampersand, so this never showed up before. Every free-text field must
+    come back decoded."""
+    tool_input = full_tool_input(
+        leg_type="other",
+        provider="Heathrow Park &amp; Ride Terminal 5",
+        start_location="Long Stay T5 &amp; Northern Perimeter Road",
+        notes="Booking reference A151JM &mdash; bring a printed copy",
+    )
+    client = FakeAnthropicClient(response=make_message(make_tool_use_block(tool_input)))
+
+    result = extract_leg("some parking confirmation text", client)
+
+    assert isinstance(result, ExtractedLeg)
+    assert result.provider == "Heathrow Park & Ride Terminal 5"
+    assert result.start_location == "Long Stay T5 & Northern Perimeter Road"
+    assert result.notes == "Booking reference A151JM — bring a printed copy"
+
+
+def test_unparseable_reason_is_also_unescaped():
+    tool_input = full_tool_input(
+        unparseable=True,
+        reason="This is spam &amp; not a real booking.",
+    )
+    client = FakeAnthropicClient(response=make_message(make_tool_use_block(tool_input)))
+
+    result = extract_leg("50% off flights!", client)
+
+    assert isinstance(result, LegExtractionError)
+    assert result.reason == "This is spam & not a real booking."
+
+
+# ---------------------------------------------------------------------------
 # Malformed / unexpected model output - must fail gracefully, never crash
 # ---------------------------------------------------------------------------
 

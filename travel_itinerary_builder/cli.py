@@ -5,9 +5,10 @@ Usage:
 
 Reads each input file as plain text, extracts one leg per file via the
 Anthropic API (one call per file - never batched, matching the "one thing
-per call" pattern the other siblings in this suite use), groups the
-successfully-extracted legs into trips by date proximity, and writes one
-markdown file plus one .ics file per detected trip into --output-dir. Every
+per call" pattern the other siblings in this suite use), collapses legs that
+describe the same real-world booking twice (dedupe_legs - see grouping.py),
+groups what's left into trips by date proximity, and writes one markdown
+file plus one .ics file per detected trip into --output-dir. Every
 unparseable/failed input is reported by name and reason in the final
 summary - never silently dropped.
 """
@@ -24,7 +25,7 @@ from dotenv import load_dotenv
 
 from .anthropic_client import DEFAULT_MODEL, build_client
 from .extractor import ExtractedLeg, LegExtractionError, extract_leg
-from .grouping import DEFAULT_GAP_DAYS, group_legs_into_trips
+from .grouping import DEFAULT_GAP_DAYS, dedupe_legs, group_legs_into_trips
 from .itinerary import render_trip_ics, render_trip_markdown, slug_for_trip
 
 
@@ -100,7 +101,7 @@ def run(argv: Optional[List[str]] = None) -> int:
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    trips = group_legs_into_trips(legs, gap_days=args.gap_days)
+    trips = group_legs_into_trips(dedupe_legs(legs), gap_days=args.gap_days)
 
     written: List[Tuple[str, int]] = []
     for trip in trips:
