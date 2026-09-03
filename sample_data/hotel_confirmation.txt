@@ -1,0 +1,17 @@
+Marriott Reservation Confirmation
+
+Confirmation number: MR998271
+
+Guest name: Harrison Campbell
+
+New York Marriott Marquis
+1535 Broadway, New York, NY 10036
+
+Check-in: June 12, 2026
+Check-out: June 15, 2026
+Room type: King Deluxe, non-smoking
+
+Rate: USD 289.00 per night (3 nights)
+Total: USD 867.00
+
+We look forward to welcoming you.

@@ -1,0 +1,20 @@
+Subject: Your booking is confirmed - BA0178
+
+Dear Harrison Campbell,
+
+Thank you for booking with British Airways. Your flight is confirmed.
+
+Booking reference: XJ7K2P
+
+Flight BA0178
+London Heathrow (LHR) -> New York JFK (JFK)
+Departure: 12 June 2026, 10:15 (Terminal 5)
+Arrival: 12 June 2026, 13:05 local time
+
+Passenger: Harrison Campbell
+Seat: 14C
+Fare class: Economy (Basic)
+
+Total paid: GBP 412.50
+
+Manage your booking online at ba.com/manage.

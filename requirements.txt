@@ -1,0 +1,7 @@
+# Runtime
+anthropic>=0.40.0
+icalendar>=5.0.0
+python-dotenv>=1.0.1
+
+# Testing (dev-only, but kept in one file for a small portfolio project)
+pytest>=8.0.0
